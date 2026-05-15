@@ -31,6 +31,11 @@ static D3D12_VIDEO_FORMAT                                 video_output_format   
 static DXGI_RATIONAL                                      video_input_framerate    = {0};
 static UINT                                               video_input_bitrate      = 0;
 
+static const char* app_name      = "d3d12-video-decode";
+static HINSTANCE   module_handle = NULL;
+static HWND        window_handle = NULL;
+static WNDCLASSA   window_class  = {0};
+
 static void print_guid(const GUID* guid)
 {
     if (!guid)
@@ -101,6 +106,37 @@ void release()
         debug->lpVtbl->Release(debug);
         debug = NULL;
     }
+    if (window_handle != NULL)
+    {
+        DestroyWindow(window_handle);
+        window_handle = NULL;
+    }
+    if (module_handle != NULL)
+    {
+        UnregisterClassA(app_name, module_handle);
+        module_handle = NULL;
+    }
+}
+
+void print_win_msg(DWORD msg)
+{
+    LPVOID lpMsgBuf;
+    DWORD  res = FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        msg,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&lpMsgBuf,
+        0,
+        NULL
+    );
+    if (res == 0)
+    {
+        printf("Failed to format windows message: 0x%lx\n", GetLastError());
+        return;
+    }
+    printf("windows: %s\n", (LPCTSTR)lpMsgBuf);
+    LocalFree(lpMsgBuf);
 }
 
 void print_usage()
@@ -161,10 +197,42 @@ void print_options()
     printf("convert: %d\n", need_conversion());
 }
 
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    switch (msg)
+    {
+        case WM_KEYDOWN:
+        {
+            if (wparam == VK_ESCAPE)
+            {
+                PostQuitMessage(0);
+                return 0;
+            }
+            else
+            {
+                return DefWindowProc(hwnd, msg, wparam, lparam);
+            }
+        }
+
+        case WM_DESTROY:
+        case WM_CLOSE:
+        {
+            PostQuitMessage(0);
+            return 0;
+        }
+
+        default:
+        {
+            return DefWindowProc(hwnd, msg, wparam, lparam);
+        }
+    }
+}
+
 int main(int argv, char** argc)
 {
     HRESULT     res = S_OK;
     const char* filename;
+    MSG         msg = {0};
 
     if (argv < 2)
     {
@@ -260,6 +328,38 @@ int main(int argv, char** argc)
 
     print_options();
 
+    /* Window */
+    module_handle              = GetModuleHandle(NULL);
+    window_class.lpfnWndProc   = WindowProc;
+    window_class.hInstance     = module_handle;
+    window_class.lpszClassName = app_name;
+    RegisterClassA(&window_class);
+    window_handle = CreateWindowExA(
+        WS_EX_APPWINDOW,
+        app_name,
+        app_name,
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        video_input_sample.Width,
+        video_input_sample.Height,
+        NULL,
+        NULL,
+        module_handle,
+        NULL
+    );
+    if (window_handle == NULL)
+    {
+        printf("Failed to create a window\n");
+        print_win_msg(GetLastError());
+        release();
+        return 1;
+    }
+    ShowWindow(window_handle, SW_SHOW);
+    SetForegroundWindow(window_handle);
+    SetFocus(window_handle);
+    ShowCursor(1);
+
     /* Debug Layers */
     res = D3D12GetDebugInterface(&IID_ID3D12Debug, (void**)&debug);
     if (SUCCEEDED(res))
@@ -269,6 +369,7 @@ int main(int argv, char** argc)
     else
     {
         printf("Failed to enable debug layers\n");
+        print_win_msg(res);
     }
 
     /* DXGI Factory */
@@ -276,6 +377,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to create DXGI Factory\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -291,6 +393,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to get DXGI Adapter\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -298,6 +401,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to get DXGI Adapter Description\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -317,6 +421,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to create device\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -325,7 +430,8 @@ int main(int argv, char** argc)
     res = device->lpVtbl->QueryInterface(device, &IID_ID3D12VideoDevice, (void**)&video_device);
     if (FAILED(res))
     {
-        printf("Failed to query Video Device: 0x%lx\n", res);
+        printf("Failed to query Video Device\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -340,6 +446,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_PROFILE_COUNT\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -353,6 +460,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_PROFILES\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -375,6 +483,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_FORMAT_COUNT\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -389,6 +498,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_FORMATS\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -414,6 +524,7 @@ int main(int argv, char** argc)
         if (FAILED(res))
         {
             printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_CONVERSION_SUPPORT\n");
+            print_win_msg(res);
             release();
             return 1;
         }
@@ -448,6 +559,7 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to create Video Decoder\n");
+        print_win_msg(res);
         release();
         return 1;
     }
@@ -469,8 +581,16 @@ int main(int argv, char** argc)
     if (FAILED(res))
     {
         printf("Failed to create Video Decoder Heap\n");
+        print_win_msg(res);
         release();
         return 1;
+    }
+
+    /* Window loop */
+    while (GetMessage(&msg, NULL, 0, 0))
+    {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
 
     release();
