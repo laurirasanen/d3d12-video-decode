@@ -5,7 +5,11 @@
 #include <d3d12.h>
 #include <d3d12video.h>
 #include <dxgi1_6.h>
-#include <Windows.h>
+#include <windows.h>
+
+#if __MINGW32__
+#include "unfuck-mingw.h"
+#endif
 
 #define TO_GB(B) ((double)(B) / (1024.0 * 1024.0 * 1024.0))
 
@@ -185,12 +189,12 @@ void print_options()
     printf("  Format: %d\n", video_input_format.Format);
     printf("  ColorSpace: %d\n", video_input_format.ColorSpace);
     printf("video_input_sample:\n");
-    printf("  Width: %lu\n", video_input_sample.Width);
-    printf("  Height: %lu\n", video_input_sample.Height);
+    printf("  Width: %u\n", video_input_sample.Width);
+    printf("  Height: %u\n", video_input_sample.Height);
     printf("video_input_framerate:\n");
-    printf("  Numerator: %lu\n", video_input_framerate.Numerator);
-    printf("  Denominator: %lu\n", video_input_framerate.Denominator);
-    printf("video_input_bitrate: %lu\n", video_input_bitrate);
+    printf("  Numerator: %u\n", video_input_framerate.Numerator);
+    printf("  Denominator: %u\n", video_input_framerate.Denominator);
+    printf("video_input_bitrate: %u\n", video_input_bitrate);
     printf("video_output_format:\n");
     printf("  Format: %d\n", video_output_format.Format);
     printf("  ColorSpace: %d\n", video_output_format.ColorSpace);
@@ -532,7 +536,7 @@ int main(int argv, char** argc)
         printf("  SupportFlags: %d\n", video_decode_conversions.SupportFlags);
         printf("  ScaleSupport:\n");
         printf(
-            "    OutputSizeRange: (%lu-%lu)x(%lu-%lu)\n",
+            "    OutputSizeRange: (%u-%u)x(%u-%u)\n",
             video_decode_conversions.ScaleSupport.OutputSizeRange.MinWidth,
             video_decode_conversions.ScaleSupport.OutputSizeRange.MaxWidth,
             video_decode_conversions.ScaleSupport.OutputSizeRange.MinHeight,
