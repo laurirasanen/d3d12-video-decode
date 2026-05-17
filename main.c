@@ -25,6 +25,7 @@ static DXGI_ADAPTER_DESC             adapter_desc            = {0};
 static D3D12_VIDEO_DECODER_DESC      video_decoder_desc      = {0};
 static D3D12_VIDEO_DECODER_HEAP_DESC video_decoder_heap_desc = {0};
 
+static D3D12_FEATURE_DATA_VIDEO_DECODE_SUPPORT            video_decode_support     = {0};
 static D3D12_FEATURE_DATA_VIDEO_DECODE_PROFILES           video_decode_profiles    = {0};
 static D3D12_FEATURE_DATA_VIDEO_DECODE_FORMATS            video_decode_formats     = {0};
 static D3D12_FEATURE_DATA_VIDEO_DECODE_CONVERSION_SUPPORT video_decode_conversions = {0};
@@ -252,7 +253,7 @@ int main(int argv, char** argc)
     video_decode_config.DecodeProfile       = D3D12_VIDEO_DECODE_PROFILE_H264;
     video_decode_config.BitstreamEncryption = D3D12_BITSTREAM_ENCRYPTION_TYPE_NONE;
     video_decode_config.InterlaceType       = D3D12_VIDEO_FRAME_CODED_INTERLACE_TYPE_NONE;
-    video_input_format.Format               = DXGI_FORMAT_420_OPAQUE;
+    video_input_format.Format               = DXGI_FORMAT_YUY2;
     video_input_format.ColorSpace           = DXGI_COLOR_SPACE_RGB_STUDIO_G22_NONE_P709;
     video_input_sample.Width                = 1920;
     video_input_sample.Height               = 1080;
@@ -510,6 +511,34 @@ int main(int argv, char** argc)
     for (UINT i = 0; i < video_decode_formats.FormatCount; i++)
     {
         printf("  %d\n", video_decode_formats.pOutputFormats[i]);
+    }
+
+    /* Video Decode Support */
+    video_decode_support.Configuration = video_decode_config;
+    video_decode_support.Width         = video_input_sample.Width;
+    video_decode_support.Height        = video_input_sample.Height;
+    video_decode_support.DecodeFormat  = video_input_format.Format;
+    video_decode_support.FrameRate     = video_input_framerate;
+    video_decode_support.BitRate       = video_input_bitrate;
+    video_decode_support.DecodeTier    = D3D12_VIDEO_DECODE_TIER_1;
+    res                                = video_device->lpVtbl->CheckFeatureSupport(
+        video_device,
+        D3D12_FEATURE_VIDEO_DECODE_SUPPORT,
+        &video_decode_support,
+        sizeof(video_decode_support)
+    );
+    if (FAILED(res))
+    {
+        printf("Failed to check D3D12_FEATURE_VIDEO_DECODE_SUPPORT\n");
+        print_win_msg(res);
+        release();
+        return 1;
+    }
+    if (video_decode_support.SupportFlags != D3D12_VIDEO_DECODE_SUPPORT_FLAG_SUPPORTED)
+    {
+        printf("Video decode configuration not supported");
+        release();
+        return 1;
     }
 
     /* Video Conversion Support */
